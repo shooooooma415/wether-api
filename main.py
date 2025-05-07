@@ -1,17 +1,14 @@
-from fastapi import FastAPI, Request,BackgroundTasks, Header
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, Request, BackgroundTasks, Header
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError
-from linebot.models import MessageEvent, TextMessage, ImageSendMessage
+from linebot.models import MessageEvent, TextMessage
 from starlette.exceptions import HTTPException
 import os
-import uuid
 import requests
 from bs4 import BeautifulSoup
-import linebot.v3.messaging
 from pprint import pprint
 from typing import Optional
-from datetime import date, datetime
+from datetime import datetime
 from dotenv import load_dotenv
 
 # 環境変数のロード
@@ -26,50 +23,55 @@ handler = WebhookHandler(os.environ["CHANNEL_SECRET"])
 def read_root():
     return {"Hello": "World"}
 
-@app.post("/message")
-async def send_message(background_tasks: BackgroundTasks):
-    """
-    LINE Messagingを使用してメッセージをブロードキャストするエンドポイント
-    バックグラウンドタスクとして実行
-    """
-    background_tasks.add_task(broadcast_message)
-    return {"status": "processing", "message": "メッセージ送信をバックグラウンドで処理しています"}
-
-
-async def broadcast_message():
-    """
-    LINEメッセージをブロードキャストするバックグラウンドタスク
-    """
-    # LINEのAPIクライアント設定
-    configuration = linebot.v3.messaging.Configuration(
-        host="https://api.line.me",
-        access_token=os.environ["ACCESS_TOKEN"]
-    )
-    
-    # 送信するメッセージ内容
-    message = {
-        "messages": [
-            {
-                "type": "text",
-                "text": "おいっす！"
-            },
-        ]
-    }
+@app.post("/callback")
+async def callback(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    x_line_signature=Header(None),
+):
+    body = await request.body()
 
     try:
-        with linebot.v3.messaging.ApiClient(configuration) as api_client:
-            # APIインスタンスの作成
-            api_instance = linebot.v3.messaging.MessagingApi(api_client)
-            # ブロードキャストリクエストの作成
-            broadcast_request = linebot.v3.messaging.BroadcastRequest.from_dict(message)
-            # リトライキーの生成
-            x_line_retry_key = str(uuid.uuid4())
+        background_tasks.add_task(
+            handler.handle, body.decode("utf-8"), x_line_signature
+        )
+    except InvalidSignatureError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    return "ok"
+
+@handler.add(MessageEvent)
+def handle_message(event: MessageEvent):
+    """
+    LINEメッセージイベントを処理する関数
+    """
+    if isinstance(event.message, TextMessage):
+        # テキストメッセージの場合
+        text = event.message.text
+        
+        # 「今日の天気」というメッセージの場合は大阪の天気を返す
+        if text == "天気" or text == "今日の天気":
+            weather_info = scrape_weather_info("大阪")
+            reply_text = f"今日の大阪の天気は{weather_info['weather']}です。最高気温は{weather_info['temperature']['max']}℃、最低気温は{weather_info['temperature']['min']}℃です。"
+            LINE_BOT_API.reply_message(event.reply_token, TextMessage(text=reply_text))
+        
+        # 「今日の[都市名]の天気」というパターンを検出
+        elif text.startswith("今日の") and text.endswith("の天気"):
+            # 「今日の」と「の天気」を除去して都市名を抽出
+            city = text[3:-3]  # 「今日の」と「の天気」を削除
+            weather_info = scrape_weather_info(city)
             
-            # ブロードキャスト実行
-            api_response = api_instance.broadcast(broadcast_request, x_line_retry_key=x_line_retry_key)
-            print("メッセージ送信成功:", api_response)
-    except Exception as e:
-        print("メッセージ送信エラー:", str(e))
+            # エラーがあった場合
+            if "error" in weather_info:
+                reply_text = f"{city}の天気情報を取得できませんでした。"
+            else:
+                reply_text = f"今日の{city}の天気は{weather_info['weather']}です。最高気温は{weather_info['temperature']['max']}℃、最低気温は{weather_info['temperature']['min']}℃です。"
+            
+            LINE_BOT_API.reply_message(event.reply_token, TextMessage(text=reply_text))
+        
+        else:
+            # その他のテキストメッセージに対してはそのまま返信
+            LINE_BOT_API.reply_message(event.reply_token, TextMessage(text=text))
 
 def scrape_weather_info(city: str = "東京"):
     """
