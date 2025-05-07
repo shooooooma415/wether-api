@@ -42,7 +42,7 @@ def send_message():
         "messages": [
             {
                 "type": "text",
-                "text": "Hello, World!"
+                "text": "おっす〜"
             },
         ]
     }
@@ -63,7 +63,7 @@ def send_message():
             return {
                 "status": "success",
                 "message": "Broadcast message sent successfully",
-                "details": api_response.to_dict()
+                "details": api_response
             }
     except Exception as e:
         # エラー時のレスポンスを返す
