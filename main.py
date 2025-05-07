@@ -12,6 +12,10 @@ import linebot.v3.messaging
 from pprint import pprint
 from typing import Optional
 from datetime import date, datetime
+from dotenv import load_dotenv
+
+# 環境変数のロード
+load_dotenv()
 
 app = FastAPI()
 
