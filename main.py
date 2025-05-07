@@ -73,7 +73,7 @@ def handle_message(event: MessageEvent):
             # その他のテキストメッセージに対してはそのまま返信
             LINE_BOT_API.reply_message(event.reply_token, TextMessage(text=text))
 
-def scrape_weather_info(city: str = "東京"):
+def scrape_weather_info(city: str):
     """
     天気情報をスクレイピングする関数
     
@@ -84,8 +84,23 @@ def scrape_weather_info(city: str = "東京"):
         dict: 天気情報を含む辞書
     """
     try:
-        # 都市名に基づいてURLを生成（今回は東京をデフォルトとする）
-        url = f"https://tenki.jp/forecast/3/16/4410/13113/"  # 東京・千代田区の天気予報URL
+        # 都市名とtenki.jpの対応するURLパラメータのマッピング
+        city_url_mapping = {
+            "東京": "3/16/4410/13113",  # 東京・千代田区
+            "大阪": "6/30/6200/27100",  # 大阪・大阪市
+            "名古屋": "5/26/5110/23100",  # 愛知・名古屋市
+            "福岡": "9/47/8210/40130",  # 福岡・福岡市
+            "札幌": "1/2/1400/01100",  # 北海道・札幌市
+            "仙台": "2/9/3410/04100",  # 宮城・仙台市
+            "広島": "7/34/6710/34100",  # 広島・広島市
+            "神戸": "6/30/6200/28110",  # 兵庫・神戸市
+            "京都": "6/29/6110/26100",  # 京都・京都市
+            "横浜": "3/17/4610/14100",  # 神奈川・横浜市
+        }
+        
+        # 都市名に基づいてURLを生成
+        url_param = city_url_mapping.get(city, "3/16/4410/13113")  # デフォルトは東京
+        url = f"https://tenki.jp/forecast/{url_param}/"
         
         # リクエストを送信
         headers = {
@@ -128,9 +143,9 @@ def scrape_weather_info(city: str = "東京"):
             }
             return weather_info
         else:
-            return {"error": "天気情報を取得できませんでした"} 
+            return {"error": "天気情報を取得できませんでした", "city": city} 
     except Exception as e:
-        return {"error": f"スクレイピングエラー: {str(e)}"}
+        return {"error": f"スクレイピングエラー: {str(e)}", "city": city}
 
 
 @app.get("/wether/")
