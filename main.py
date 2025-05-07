@@ -26,10 +26,19 @@ handler = WebhookHandler(os.environ["CHANNEL_SECRET"])
 def read_root():
     return {"Hello": "World"}
 
-@app.get("/message")
-def send_message():
+@app.post("/message")
+async def send_message(background_tasks: BackgroundTasks):
     """
     LINE Messagingを使用してメッセージをブロードキャストするエンドポイント
+    バックグラウンドタスクとして実行
+    """
+    background_tasks.add_task(broadcast_message)
+    return {"status": "processing", "message": "メッセージ送信をバックグラウンドで処理しています"}
+
+
+async def broadcast_message():
+    """
+    LINEメッセージをブロードキャストするバックグラウンドタスク
     """
     # LINEのAPIクライアント設定
     configuration = linebot.v3.messaging.Configuration(
@@ -42,7 +51,7 @@ def send_message():
         "messages": [
             {
                 "type": "text",
-                "text": "おっす〜"
+                "text": "おいっす！"
             },
         ]
     }
@@ -58,21 +67,9 @@ def send_message():
             
             # ブロードキャスト実行
             api_response = api_instance.broadcast(broadcast_request, x_line_retry_key=x_line_retry_key)
-            
-            # 成功レスポンスを返す
-            return {
-                "status": "success",
-                "message": "Broadcast message sent successfully",
-                "details": api_response
-            }
+            print("メッセージ送信成功:", api_response)
     except Exception as e:
-        # エラー時のレスポンスを返す
-        error_message = str(e)
-        return {
-            "status": "error",
-            "message": "Failed to send broadcast message",
-            "details": error_message
-        }
+        print("メッセージ送信エラー:", str(e))
 
 def scrape_weather_info(city: str = "東京"):
     """
